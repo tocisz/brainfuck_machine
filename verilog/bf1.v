@@ -6,12 +6,12 @@ module bf1 (
 
    output wire [`DADDR_WIDTH-1:0] mem_addr,
    output reg  mem_wr,
-   output wire [`DATA_WIDTH-1:0] mem_dout,
+   output reg  [`DATA_WIDTH-1:0] mem_dout,
    input  wire [`DATA_WIDTH-1:0] mem_din,
 
-   output wire io_wr,
+   output reg  io_wr,
    input  wire [`DATA_WIDTH-1:0] io_din,
-   output wire [`DATA_WIDTH-1:0] io_dout,
+   output reg  [`DATA_WIDTH-1:0] io_dout,
    // TODO wait for IO
    // input  wire io_in_ready
    // output wire io_in_ack
