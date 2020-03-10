@@ -1,0 +1,10 @@
+all: build comp run
+
+build:
+	verilator -Wall --trace --cc stack.v --exe stack.cpp
+
+comp:
+	make -C obj_dir -j -f Vstack.mk Vstack
+
+run:
+	obj_dir/Vstack
