@@ -17,7 +17,7 @@ module stack
 
   reg [WIDTH-1:0] store[0:(2**DEPTH)-1];
   /* verilator lint_off UNUSED */
-  reg [100:0] verbose;
+  reg verbose;
   /* verilator lint_on UNUSED */
 
   always @(posedge clk)

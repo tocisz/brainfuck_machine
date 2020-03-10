@@ -7,4 +7,4 @@ comp:
 	make -C obj_dir -j -f Vbf1.mk Vbf1
 
 run:
-	obj_dir/Vbf1 out.bin
+	obj_dir/Vbf1 out.bin +verbose
