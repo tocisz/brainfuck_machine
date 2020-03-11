@@ -46,78 +46,87 @@ module bf1 (
    );
 
    // ALU
+   reg alu_op;
    reg [`DADDR_WIDTH-1:0] alu_in;
-   reg [5:0] alu_arg;
+   reg [`CADDR_WIDTH-1:0] alu_arg;
    reg [`DADDR_WIDTH-1:0] alu_out;
 
    reg lj, ljN;
    reg [4:0] lj_offset, lj_offsetN;
 
    // before ALU
-   always @(maddr, insn, mem_din)
+   always @(maddr, insn, mem_din, lj, lj_offset, pc)
    begin
      // defaults
-     alu_arg = insn[5:0];
-	  alu_in = 0;
-     case (insn[7:6])
-       2'b00: begin alu_in = maddr; end
-       2'b01: begin alu_in = {7'b0,mem_din}; end
-       default: ;
+     alu_op  = insn[5];
+     alu_arg = {8'b0,insn[4:0]};
+	   alu_in  = maddr;
+     casez ({lj,insn[7:6]})
+       3'b0_00: ; // see defaults
+       3'b0_01: begin alu_in = {7'b0,mem_din}; end
+       3'b1_??: begin alu_in = {2'b0,lj_offset,insn}; alu_arg = pc; alu_op = 0; end
+       3'b0_10: begin alu_in = {10'b0,insn[4:0]};     alu_arg = pc; alu_op = 0; end
+       3'b0_11: ; // ALU not used
      endcase
    end
 
    // ALU
-   always @(alu_in, alu_arg)
+   always @(alu_in, alu_arg, alu_op)
    begin
-    if (alu_arg[5]) // simplify?
-      alu_out = alu_in - {10'b0,alu_arg[4:0]} - 1'b1;
+    if (alu_op) // simplify?
+      alu_out = alu_in - {2'b0,alu_arg} - 1'b1;
     else
-      alu_out = alu_in + {10'b0,alu_arg[4:0]} + 1'b1;
+      alu_out = alu_in + {2'b0,alu_arg} + 1'b1;
    end
 
+   reg do_jump;
+   reg do_ret;
+
    // after ALU
-   always @(pc, maddr, insn, alu_out, mem_din, io_din, rsp, rst0, lj, lj_offset)
+   always @(pc, maddr, insn, alu_out, mem_din, io_din, lj)
    begin
      // defaults
      mem_wr = 0;
-     rstkW  = 0;
      io_wr  = 0;
      ljN = 0;
-     pcN = pc + 1'b1;
      maddrN = maddr;
-     rspN = rsp;
-	  rstkD = pcN; // nothing else can go to the stack
-	  io_dout = mem_din; // nothing else can go as IO output
-	  mem_dout = io_din; // default that can be overriden
-	  lj_offsetN = insn[4:0]; // nothing else can be here
-     if (lj) // long jump second phase
+	   io_dout = mem_din; // nothing else can go as IO output
+	   mem_dout = io_din; // default that can be overriden
+     do_jump = 0;
+     do_ret = 0;
+
+     casez ({lj,insn[7:5]})
+       4'b0_00?: begin   maddrN = alu_out; end
+       4'b0_01?: begin mem_dout = alu_out[7:0]; mem_wr = 1; end
+       4'b0_100: if (|insn[4:0]) do_jump = 1; // [
+                 else            do_ret  = 1; // ]
+       4'b0_101: begin     ljN = 1; end // begin long jump
+       4'b1_???: begin do_jump = 1; end // do long jump
+       4'b0_110: begin  mem_wr = 1; end // , (sync signal?)
+       4'b0_111: begin   io_wr = 1; end // .
+     endcase
+
+   end
+
+   always @ (do_jump, do_ret, pc, insn, mem_din, rsp, rst0, alu_out)
+   begin
+     pcN   = pc + 1'b1;
+     rspN  = rsp;
+     rstkW = 0;
+	   rstkD = pcN; // nothing else can go to the stack
+     lj_offsetN = insn[4:0]; // nothing else can be here
+
+     if (do_jump) begin
        if (mem_din != 0) begin
-         rspN = rsp + 1'b1; // into the loop [TODO factor out]
+         rspN = rsp + 1'b1; // into the loop
          rstkW = 1;
        end else begin
-         pcN = pc + {lj_offset,insn} + 1'b1; // TODO use ALU for that
+         pcN = alu_out[12:0];
        end
-     else // normal instruction
-       casez (insn[7:5])
-         3'b00?: begin   maddrN = alu_out; end
-         3'b01?: begin mem_dout = alu_out[7:0]; mem_wr = 1; end
-         3'b100:
-         if (|insn[4:0]) // [
-           // mem_din can come with a delay...
-           if (mem_din != 0) begin
-               rspN = rsp + 1'b1; // into the loop
-               rstkW = 1;
-               // $display(" -- Pushing ", rstkD);
-           end else begin
-              pcN = pc + {8'b0,insn[4:0]} + 1'b1; // skip the loop
-           end
-         else // ]
-           if (mem_din != 0) pcN = rst0; // loop again
-           else             rspN = rsp - 1'b1; // leave the loop
-         3'b101: begin    ljN = 1; end // begin long jump
-         3'b110: begin mem_wr = 1; end // , (sync signal?)
-         3'b111: begin  io_wr = 1; end // .
-       endcase
+     end else if (do_ret) begin
+       if (mem_din != 0) pcN = rst0; // loop again
+       else rspN = rsp - 1'b1; // leave the loop
+     end
    end
 
    always @(negedge resetq or posedge clk)
