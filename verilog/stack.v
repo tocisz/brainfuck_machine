@@ -6,9 +6,6 @@ module stack
     parameter WIDTH=16
   )
   (input wire clk,
-  /* verilator lint_off UNUSED */
-  input wire resetq,
-  /* verilator lint_on UNUSED */
   input wire [DEPTH-1:0] ra,
   output wire [WIDTH-1:0] rd,
   input wire we,
@@ -24,7 +21,7 @@ module stack
     if (we) begin
       store[wa] <= wd;
       if ($value$plusargs("verbose", verbose))
-        $write(" -- Stack write ", wd, " at ", wa, "\n");
+        $display(" -- Stack write ", wd, " at ", wa);
     end
 
   assign rd = store[ra];

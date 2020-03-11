@@ -38,7 +38,6 @@ module bf1 (
    wire [`CADDR_WIDTH-1:0] rst0;
    stack #(.DEPTH(`DEPTH),.WIDTH(`CADDR_WIDTH)) rstack (
      .clk(clk),
-     .resetq(resetq),
      .ra(rsp),
      .rd(rst0),
      .we(rstkW),
@@ -59,6 +58,7 @@ module bf1 (
    begin
      // defaults
      alu_arg = insn[5:0];
+	  alu_in = 0;
      case (insn[7:6])
        2'b00: begin alu_in = maddr; end
        2'b01: begin alu_in = {7'b0,mem_din}; end
@@ -70,29 +70,32 @@ module bf1 (
    always @(alu_in, alu_arg)
    begin
     if (alu_arg[5]) // simplify?
-      alu_out = alu_in - {10'b0,alu_arg[4:0]} - 15'b1;
+      alu_out = alu_in - {10'b0,alu_arg[4:0]} - 1'b1;
     else
-      alu_out = alu_in + {10'b0,alu_arg[4:0]} + 15'b1;
+      alu_out = alu_in + {10'b0,alu_arg[4:0]} + 1'b1;
    end
 
    // after ALU
-   always @(pc, maddr, insn, alu_out, mem_din, rsp, rst0, lj, lj_offset)
+   always @(pc, maddr, insn, alu_out, mem_din, io_din, rsp, rst0, lj, lj_offset)
    begin
      // defaults
      mem_wr = 0;
      rstkW  = 0;
      io_wr  = 0;
      ljN = 0;
-     pcN = pc+1;
+     pcN = pc + 1'b1;
      maddrN = maddr;
      rspN = rsp;
+	  rstkD = pcN; // nothing else can go to the stack
+	  io_dout = mem_din; // nothing else can go as IO output
+	  mem_dout = io_din; // default that can be overriden
+	  lj_offsetN = insn[4:0]; // nothing else can be here
      if (lj) // long jump second phase
        if (mem_din != 0) begin
-         rspN = rsp+1; // into the loop [TODO factor out]
+         rspN = rsp + 1'b1; // into the loop [TODO factor out]
          rstkW = 1;
-         rstkD = pcN;
        end else begin
-         pcN = pc + {lj_offset,insn} + 13'b1; // TODO use ALU for that
+         pcN = pc + {lj_offset,insn} + 1'b1; // TODO use ALU for that
        end
      else // normal instruction
        casez (insn[7:5])
@@ -102,19 +105,18 @@ module bf1 (
          if (|insn[4:0]) // [
            // mem_din can come with a delay...
            if (mem_din != 0) begin
-               rspN = rsp+1; // into the loop
+               rspN = rsp + 1'b1; // into the loop
                rstkW = 1;
-               rstkD = pcN;
-               // $write(" -- Pushing ", rstkD, "\n");
+               // $display(" -- Pushing ", rstkD);
            end else begin
-              pcN = pc + {8'b0,insn[4:0]} + 13'b1; // skip the loop
+              pcN = pc + {8'b0,insn[4:0]} + 1'b1; // skip the loop
            end
          else // ]
            if (mem_din != 0) pcN = rst0; // loop again
-           else             rspN = rsp-1; // leave the loop
-         3'b101: begin lj_offsetN = insn[4:0];   ljN = 1; end // begin long jump
-         3'b110: begin   mem_dout = io_din;   mem_wr = 1; $finish(); end // , (sync signal?)
-         3'b111: begin    io_dout = mem_din;   io_wr = 1; end // .
+           else             rspN = rsp - 1'b1; // leave the loop
+         3'b101: begin    ljN = 1; end // begin long jump
+         3'b110: begin mem_wr = 1; end // , (sync signal?)
+         3'b111: begin  io_wr = 1; end // .
        endcase
    end
 
