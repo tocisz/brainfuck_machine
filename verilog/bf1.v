@@ -11,7 +11,7 @@ module bf1 (
 
    output reg  io_wr,
    input  wire [`DATA_WIDTH-1:0] io_din,
-   output reg  [`DATA_WIDTH-1:0] io_dout,
+   output wire [`DATA_WIDTH-1:0] io_dout,
    // TODO wait for IO
    // input  wire io_in_ready
    // output wire io_in_ack
@@ -34,7 +34,7 @@ module bf1 (
    // Stack and stack variables
    reg [`DEPTH-1:0] rsp, rspN;
    reg rstkW = 0;                 // R stack write
-   reg [`CADDR_WIDTH-1:0] rstkD;   // R stack write value
+   wire [`CADDR_WIDTH-1:0] rstkD;   // R stack write value
    wire [`CADDR_WIDTH-1:0] rst0;
    stack #(.DEPTH(`DEPTH),.WIDTH(`CADDR_WIDTH)) rstack (
      .clk(clk),
@@ -52,7 +52,8 @@ module bf1 (
    reg [`DADDR_WIDTH-1:0] alu_out;
 
    reg lj, ljN;
-   reg [4:0] lj_offset, lj_offsetN;
+   reg  [4:0] lj_offset;
+   wire [4:0] lj_offsetN;
 
    // before ALU
    always @(maddr, insn, mem_din, lj, lj_offset, pc)
@@ -83,14 +84,14 @@ module bf1 (
    reg do_ret;
 
    // after ALU
-   always @(pc, maddr, insn, alu_out, mem_din, io_din, lj)
+   assign io_dout = mem_din; // nothing else can go as IO output
+   always @(pc, maddr, insn, alu_out, io_din, lj)
    begin
      // defaults
      mem_wr = 0;
      io_wr  = 0;
      ljN = 0;
      maddrN = maddr;
-	   io_dout = mem_din; // nothing else can go as IO output
 	   mem_dout = io_din; // default that can be overriden
      do_jump = 0;
      do_ret = 0;
@@ -105,16 +106,16 @@ module bf1 (
        4'b0_110: begin  mem_wr = 1; end // , (sync signal?)
        4'b0_111: begin   io_wr = 1; end // .
      endcase
-
    end
 
-   always @ (do_jump, do_ret, pc, insn, mem_din, rsp, rst0, alu_out)
+   // calculate pc
+   assign rstkD = pcN; // if we put anything on stack, it's pcN
+   assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
+   always @ (do_jump, do_ret, pc, mem_din, rsp, rst0, alu_out)
    begin
      pcN   = pc + 1'b1;
      rspN  = rsp;
      rstkW = 0;
-	   rstkD = pcN; // nothing else can go to the stack
-     lj_offsetN = insn[4:0]; // nothing else can be here
 
      if (do_jump) begin
        if (mem_din != 0) begin
