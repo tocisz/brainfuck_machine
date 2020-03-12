@@ -80,8 +80,8 @@ module bf1 (
       alu_out = alu_in + {2'b0,alu_arg} + 1'b1;
    end
 
+   reg do_jump_or_ret;
    reg do_jump;
-   reg do_ret;
 
    // after ALU
    assign io_dout = mem_din; // nothing else can go as IO output
@@ -93,16 +93,15 @@ module bf1 (
      ljN = 0;
      maddrN = maddr;
 	   mem_dout = io_din; // default that can be overriden
+     do_jump_or_ret = 0;
      do_jump = 0;
-     do_ret = 0;
 
      casez ({lj,insn[7:5]})
        4'b0_00?: begin   maddrN = alu_out; end
        4'b0_01?: begin mem_dout = alu_out[7:0]; mem_wr = 1; end
-       4'b0_100: if (|insn[4:0]) do_jump = 1; // [
-                 else            do_ret  = 1; // ]
+       4'b0_100: begin do_jump_or_ret = 1; do_jump = |insn[4:0]; end // [ or ]
+       4'b1_???: begin do_jump_or_ret = 1; do_jump = 1; end // do long jump
        4'b0_101: begin     ljN = 1; end // begin long jump
-       4'b1_???: begin do_jump = 1; end // do long jump
        4'b0_110: begin  mem_wr = 1; end // , (sync signal?)
        4'b0_111: begin   io_wr = 1; end // .
      endcase
@@ -111,22 +110,29 @@ module bf1 (
    // calculate pc
    assign rstkD = pcN; // if we put anything on stack, it's pcN
    assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
-   always @ (do_jump, do_ret, pc, mem_din, rsp, rst0, alu_out)
+   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, alu_out)
    begin
+     // default: go to the next instruction
      pcN   = pc + 1'b1;
      rspN  = rsp;
      rstkW = 0;
 
-     if (do_jump) begin
-       if (mem_din != 0) begin
-         rspN = rsp + 1'b1; // into the loop
-         rstkW = 1;
-       end else begin
-         pcN = alu_out[12:0];
+     if (do_jump_or_ret)
+     begin
+       if (do_jump)
+       begin // [
+         if (mem_din != 0) begin
+           rspN = rsp + 1'b1; // into the loop
+           rstkW = 1;
+         end else begin
+           pcN = alu_out[12:0]; // skip the loop
+         end
        end
-     end else if (do_ret) begin
-       if (mem_din != 0) pcN = rst0; // loop again
-       else rspN = rsp - 1'b1; // leave the loop
+       else
+       begin // ]
+         if (mem_din != 0) pcN = rst0; // loop again
+         else rspN = rsp - 1'b1; // leave the loop
+       end
      end
    end
 
