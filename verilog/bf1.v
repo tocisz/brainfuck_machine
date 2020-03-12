@@ -47,9 +47,9 @@ module bf1 (
 
    // ALU
    reg alu_op;
-   reg [`DADDR_WIDTH-1:0] alu_in;
-   reg [`CADDR_WIDTH-1:0] alu_arg;
-   reg [`DADDR_WIDTH-1:0] alu_out;
+   reg [`DADDR_WIDTH-1:0] alu_a;
+   reg [`CADDR_WIDTH-1:0] alu_b;
+   reg [`DADDR_WIDTH-1:0] alu_c;
 
    reg lj, ljN;
    reg  [4:0] lj_offset;
@@ -58,26 +58,25 @@ module bf1 (
    // before ALU
    always @(maddr, insn, mem_din, lj, lj_offset, pc)
    begin
-     // defaults
-     alu_op  = insn[5];
-     alu_arg = {8'b0,insn[4:0]};
-	   alu_in  = maddr;
+     alu_op =  1'bX; // don't care
+     alu_a  = 15'bX; // let synthesis decide what takes least resources
+     alu_b  = 13'bX;
      casez ({lj,insn[7:6]})
-       3'b0_00: ; // see defaults
-       3'b0_01: begin alu_in = {7'b0,mem_din}; end
-       3'b1_??: begin alu_in = {2'b0,lj_offset,insn}; alu_arg = pc; alu_op = 0; end
-       3'b0_10: begin alu_in = {10'b0,insn[4:0]};     alu_arg = pc; alu_op = 0; end
+       3'b0_00: begin alu_op = insn[5]; alu_a = maddr;                 alu_b = {8'b0,insn[4:0]}; end
+       3'b0_01: begin alu_op = insn[5]; alu_a = {7'b0,mem_din};        alu_b = {8'b0,insn[4:0]}; end
+       3'b1_??: begin alu_op = 0;       alu_a = {2'b0,lj_offset,insn}; alu_b = pc; end
+       3'b0_10: begin alu_op = 0;       alu_a = {10'b0,insn[4:0]};     alu_b = pc; end
        3'b0_11: ; // ALU not used
      endcase
    end
 
    // ALU
-   always @(alu_in, alu_arg, alu_op)
+   always @(alu_op, alu_a, alu_b)
    begin
     if (alu_op) // simplify?
-      alu_out = alu_in - {2'b0,alu_arg} - 1'b1;
+      alu_c = alu_a - {2'b0,alu_b} - 1'b1;
     else
-      alu_out = alu_in + {2'b0,alu_arg} + 1'b1;
+      alu_c = alu_a + {2'b0,alu_b} + 1'b1;
    end
 
    reg do_jump_or_ret;
@@ -85,7 +84,7 @@ module bf1 (
 
    // after ALU
    assign io_dout = mem_din; // nothing else can go as IO output
-   always @(pc, maddr, insn, alu_out, io_din, lj)
+   always @(pc, maddr, insn, alu_c, io_din, lj)
    begin
      // defaults
      mem_wr = 0;
@@ -97,8 +96,8 @@ module bf1 (
      do_jump = 0;
 
      casez ({lj,insn[7:5]})
-       4'b0_00?: begin   maddrN = alu_out; end
-       4'b0_01?: begin mem_dout = alu_out[7:0]; mem_wr = 1; end
+       4'b0_00?: begin   maddrN = alu_c; end
+       4'b0_01?: begin mem_dout = alu_c[7:0]; mem_wr = 1; end
        4'b0_100: begin do_jump_or_ret = 1; do_jump = |insn[4:0]; end // [ or ]
        4'b1_???: begin do_jump_or_ret = 1; do_jump = 1; end // do long jump
        4'b0_101: begin     ljN = 1; end // begin long jump
@@ -110,7 +109,7 @@ module bf1 (
    // calculate pc
    assign rstkD = pcN; // if we put anything on stack, it's pcN
    assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
-   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, alu_out)
+   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, alu_c)
    begin
      // default: go to the next instruction
      pcN   = pc + 1'b1;
@@ -125,7 +124,7 @@ module bf1 (
            rspN = rsp + 1'b1; // into the loop
            rstkW = 1;
          end else begin
-           pcN = alu_out[12:0]; // skip the loop
+           pcN = alu_c[12:0]; // skip the loop
          end
        end
        else
