@@ -12,9 +12,6 @@ module bf1 (
    output reg  io_wr,
    input  wire [`DATA_WIDTH-1:0] io_din,
    output wire [`DATA_WIDTH-1:0] io_dout,
-   // TODO wait for IO
-   // input  wire io_in_ready
-   // output wire io_in_ack
 
    output wire [`CADDR_WIDTH-1:0] code_addr,
    input  wire [7:0] insn,
@@ -101,7 +98,7 @@ module bf1 (
        4'b0_100: begin do_jump_or_ret = 1; do_jump = |insn[4:0]; end // [ or ]
        4'b1_???: begin do_jump_or_ret = 1; do_jump = 1; end // do long jump
        4'b0_101: begin     ljN = 1; end // begin long jump
-       4'b0_110: begin  mem_wr = 1; end // , (sync signal?)
+       4'b0_110: begin  mem_wr = 1; end // ,
        4'b0_111: begin   io_wr = 1; end // .
      endcase
    end
