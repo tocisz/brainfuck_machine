@@ -3,8 +3,10 @@ import sys
 import pprint
 
 out_bin = bytearray()
-OPS = ['<','>','-','+','[',']',',','.']
-SINGLES = ['[',']',',','.']
+NEUTRAL = ['[',']',',','.']
+NEGATIVE = ['<','-']
+POSITIVE = ['>','+']
+OPS = NEUTRAL + NEGATIVE + POSITIVE
 
 # 10000000 is end of loop
 # 10000001 to 10011111 is short jump
@@ -76,23 +78,26 @@ class Node:
             )
 
 def encode(count, op, out_bin):
-    if   op == '>': opc = 0b00000000
-    elif op == '<': opc = 0b00100000
-    elif op == '+': opc = 0b01000000
-    elif op == '-': opc = 0b01100000
+    if   op in ['>','<']: opc = 0b00000000
+    elif op in ['+','-']: opc = 0b01000000
     elif op == ']': opc = 0b10000000 # low bits are 0
     elif op == '[': opc = 0b10111111 # low bits for jump offset
-    elif op == ',': opc = 0b11000000 # low bits for channel number
-    elif op == '.': opc = 0b11100000 # low bits for channel number
+    elif op == ',': opc = 0b11000000 # low bits revserved for channel number
+    elif op == '.': opc = 0b11100000 # low bits revserved for channel number
     else: raise SyntaxError ("Unknown opcode")
-    if op in SINGLES:
+    if op in NEUTRAL:
         out_bin.append(opc)
         return count-1
     else:
-        cnt = min(0b00100000, count)
-        opc |= cnt-1
+        if op in POSITIVE:
+            cnt = min(31, count)
+            rest = count-cnt
+        else:
+            cnt = max(-32, -count)
+            rest = count+cnt
+        opc |= cnt & 0b00111111
         out_bin.append(opc)
-        return count-cnt
+        return rest
 
 def out(count, op):
     b = 0
@@ -113,7 +118,7 @@ def calc_jmp(out_bin, tree, offset, depth):
         inserted += calc_jmp(out_bin, t, offset+inserted, depth+1)
     # Now this loop
     if tree.l >= 0:
-        length = tree.r - tree.l + inserted
+        length = tree.r - tree.l + inserted + 1
         if length >= 0b00100000:
             # long jump
             high = (length >> 8)
@@ -172,7 +177,8 @@ def brainfuck (fd=None):
     print()
     calculate_jumps()
 
-    with open("out.bin", "wb") as binary_file:
+    outfn = sys.argv[2] if sys.argv[2:] else "out.bin"
+    with open(outfn, "wb") as binary_file:
         binary_file.write(out_bin)
 
 if __name__ == "__main__": brainfuck()

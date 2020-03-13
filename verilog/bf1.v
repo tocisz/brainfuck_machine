@@ -43,7 +43,6 @@ module bf1 (
    );
 
    // ALU
-   reg alu_op;
    reg [`DADDR_WIDTH-1:0] alu_a;
    reg [`CADDR_WIDTH-1:0] alu_b;
    reg [`DADDR_WIDTH-1:0] alu_c;
@@ -55,25 +54,21 @@ module bf1 (
    // before ALU
    always @(maddr, insn, mem_din, lj, lj_offset, pc)
    begin
-     alu_op =  1'bX; // don't care
      alu_a  = 15'bX; // let synthesis decide what takes least resources
      alu_b  = 13'bX;
      casez ({lj,insn[7:6]})
-       3'b0_00: begin alu_op = insn[5]; alu_a = maddr;                 alu_b = {8'b0,insn[4:0]}; end
-       3'b0_01: begin alu_op = insn[5]; alu_a = {7'b0,mem_din};        alu_b = {8'b0,insn[4:0]}; end
-       3'b1_??: begin alu_op = 0;       alu_a = {2'b0,lj_offset,insn}; alu_b = pc; end
-       3'b0_10: begin alu_op = 0;       alu_a = {10'b0,insn[4:0]};     alu_b = pc; end
+       3'b0_00: begin alu_a = maddr;           alu_b = {{8{insn[5]}},insn[4:0]}; end // < >
+       3'b0_01: begin alu_a = {7'b0,mem_din};  alu_b = {{8{insn[5]}},insn[4:0]}; end // - +
+       3'b0_10: begin alu_a = {2'b0,pc};       alu_b = {{8{insn[5]}},insn[4:0]}; end // [
+       3'b1_??: begin alu_a = {2'b0,pc};       alu_b = {lj_offset,   insn}; end // long jump
        3'b0_11: ; // ALU not used
      endcase
    end
 
    // ALU
-   always @(alu_op, alu_a, alu_b)
+   always @(alu_a, alu_b)
    begin
-    if (alu_op) // simplify?
-      alu_c = alu_a - {2'b0,alu_b} - 1'b1;
-    else
-      alu_c = alu_a + {2'b0,alu_b} + 1'b1;
+      alu_c = alu_a + {{2{alu_b[`CADDR_WIDTH-1]}},alu_b};
    end
 
    reg do_jump_or_ret;

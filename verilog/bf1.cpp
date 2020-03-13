@@ -48,7 +48,6 @@ unsigned char mem[MEMSIZE];
 bool verbose = false;
 
 int main(int argc, char **argv, char **env) {
-  unsigned long i;
   int clk;
   if (argc <= 1) {
     cout << "Give me program name!" << endl;
@@ -88,6 +87,7 @@ int main(int argc, char **argv, char **env) {
   int mem_addr = 0;
 
   top.resetq = 1;
+  unsigned long i = 0;
   do {
     // Write to CPU
     top.insn = code[code_addr];
@@ -102,6 +102,11 @@ int main(int argc, char **argv, char **env) {
     // values need to be stable before posedge, so we read them here
     code_addr = top.code_addr;
     mem_addr = top.mem_addr;
+    if (mem_addr < 0 || mem_addr >= MEMSIZE) {
+      cout << "i = " << i << endl;
+      cout << "Memory out of range " << mem_addr << endl;
+      exit(2);
+    }
     if (top.mem_wr)
       mem[mem_addr] = top.mem_dout;
     if (top.io_wr)
