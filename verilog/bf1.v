@@ -42,41 +42,15 @@ module bf1 (
      .wd(rstkD)
    );
 
-   // ALU
-   reg [`DADDR_WIDTH-1:0] alu_a;
-   reg [`CADDR_WIDTH-1:0] alu_b;
-   reg [`DADDR_WIDTH-1:0] alu_c;
-
    reg lj, ljN;
    reg  [4:0] lj_offset;
    wire [4:0] lj_offsetN;
 
-   // before ALU
-   always @(maddr, insn, mem_din, lj, lj_offset, pc)
-   begin
-     alu_a  = 15'bX; // let synthesis decide what takes least resources
-     alu_b  = 13'bX;
-     casez ({lj,insn[7:6]})
-       3'b0_00: begin alu_a = maddr;           alu_b = {{8{insn[5]}},insn[4:0]}; end // < >
-       3'b0_01: begin alu_a = {7'b0,mem_din};  alu_b = {{8{insn[5]}},insn[4:0]}; end // - +
-       3'b0_10: begin alu_a = {2'b0,pc};       alu_b = {{8{insn[5]}},insn[4:0]}; end // [
-       3'b1_??: begin alu_a = {2'b0,pc};       alu_b = {lj_offset,   insn}; end // long jump
-       3'b0_11: ; // ALU not used
-     endcase
-   end
-
-   // ALU
-   always @(alu_a, alu_b)
-   begin
-      alu_c = alu_a + {{2{alu_b[`CADDR_WIDTH-1]}},alu_b};
-   end
-
    reg do_jump_or_ret;
    reg do_jump;
 
-   // after ALU
    assign io_dout = mem_din; // nothing else can go as IO output
-   always @(pc, maddr, insn, alu_c, io_din, lj)
+   always @(pc, maddr, mem_din, insn, io_din, lj)
    begin
      // defaults
      mem_wr = 0;
@@ -88,8 +62,8 @@ module bf1 (
      do_jump = 0;
 
      casez ({lj,insn[7:5]})
-       4'b0_00?: begin   maddrN = alu_c; end
-       4'b0_01?: begin mem_dout = alu_c[7:0]; mem_wr = 1; end
+       4'b0_00?: begin   maddrN = maddr + {{10{insn[5]}},insn[4:0]}; end
+       4'b0_01?: begin mem_dout = mem_din + {{3{insn[5]}},insn[4:0]}; mem_wr = 1; end
        4'b0_100: begin do_jump_or_ret = 1; do_jump = |insn[4:0]; end // [ or ]
        4'b1_???: begin do_jump_or_ret = 1; do_jump = 1; end // do long jump
        4'b0_101: begin     ljN = 1; end // begin long jump
@@ -101,7 +75,7 @@ module bf1 (
    // calculate pc
    assign rstkD = pcN; // if we put anything on stack, it's pcN
    assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
-   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, alu_c)
+   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, lj, lj_offset)
    begin
      // default: go to the next instruction
      pcN   = pc + 1'b1;
@@ -115,8 +89,11 @@ module bf1 (
          if (mem_din != 0) begin
            rspN = rsp + 1'b1; // into the loop
            rstkW = 1;
-         end else begin
-           pcN = alu_c[12:0]; // skip the loop
+         end else begin // skip the loop
+           if (lj)
+             pcN = pc + {lj_offset,insn};
+           else
+             pcN = pc + {{8{insn[5]}},insn[4:0]};
          end
        end
        else
