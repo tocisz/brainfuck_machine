@@ -46,11 +46,14 @@ module bf1 (
    reg  [4:0] lj_offset;
    wire [4:0] lj_offsetN;
 
-   reg do_jump_or_ret;
-   reg do_jump;
 
    assign io_dout = mem_din; // nothing else can go as IO output
-   always @(pc, maddr, mem_din, insn, io_din, lj)
+   assign rstkD = pcN; // if we put anything on stack, it's pcN
+   assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
+
+   reg do_jump_or_ret;
+   reg do_jump;
+   always @(pc, maddr, mem_din, insn, io_din, lj, lj_offset, rsp, rst0)
    begin
      // defaults
      mem_wr = 0;
@@ -70,13 +73,7 @@ module bf1 (
        4'b0_110: begin  mem_wr = 1; end // ,
        4'b0_111: begin   io_wr = 1; end // .
      endcase
-   end
 
-   // calculate pc
-   assign rstkD = pcN; // if we put anything on stack, it's pcN
-   assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
-   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, lj, lj_offset)
-   begin
      // default: go to the next instruction
      pcN   = pc + 1'b1;
      rspN  = rsp;
