@@ -1,5 +1,3 @@
-`include "common.h"
-
 module stack
   #(
     parameter DEPTH=4,
