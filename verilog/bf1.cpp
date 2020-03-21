@@ -25,7 +25,6 @@ void print(Vbf1& top, int i) {
     // CPU output is computed before positive edge
     cout << "    code_addr=" << bitset<CADDR_WIDTH>(top.code_addr)
          << " mem_addr=" << bitset<DADDR_WIDTH>(top.mem_addr)
-         << " rsp=" << bitset<STACK_DEPTH>(top._rsp)
          << " mem_wr=" << bitset<1>(top.mem_wr);
     if (top.mem_wr) {
       cout << " mem_dout=" << bitset<DATA_WIDTH>(top.mem_dout);

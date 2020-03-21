@@ -14,13 +14,8 @@ module bf1 (
    output wire [`DATA_WIDTH-1:0] io_dout,
 
    output wire [`CADDR_WIDTH-1:0] code_addr,
-   input  wire [7:0] insn,
-
-   output wire [`DEPTH-1:0] _rsp
+   input  wire [7:0] insn
 );
-
-   // for debug only
-   assign _rsp = rspN;
 
    reg [`CADDR_WIDTH-1:0] pc, pcN;
    assign code_addr = pcN; // output next value as soon as it propagates
@@ -29,16 +24,15 @@ module bf1 (
    assign mem_addr = maddrN; // output next value as soon as it propagates
 
    // Stack and stack variables
-   reg [`DEPTH-1:0] rsp, rspN;
+   reg [1:0] rstDeltaN;
    reg rstkW = 0;                 // R stack write
    wire [`CADDR_WIDTH-1:0] rstkD;   // R stack write value
    wire [`CADDR_WIDTH-1:0] rst0;
-   stack #(.DEPTH(`DEPTH),.WIDTH(`CADDR_WIDTH)) rstack (
+   stack2 #(.DEPTH(2**`DEPTH),.WIDTH(`CADDR_WIDTH)) rstack (
      .clk(clk),
-     .ra(rsp),
      .rd(rst0),
      .we(rstkW),
-     .wa(rspN),
+     .delta(rstDeltaN),
      .wd(rstkD)
    );
 
@@ -101,11 +95,11 @@ module bf1 (
    // calculate pc
    assign rstkD = pcN; // if we put anything on stack, it's pcN
    assign lj_offsetN = insn[4:0]; // remember offset from previous instruction
-   always @ (do_jump_or_ret, do_jump, pc, mem_din, rsp, rst0, alu_c)
+   always @ (do_jump_or_ret, do_jump, pc, mem_din, rst0, alu_c)
    begin
      // default: go to the next instruction
      pcN   = pc + 1'b1;
-     rspN  = rsp;
+     rstDeltaN  = 2'b00;
      rstkW = 0;
 
      if (do_jump_or_ret)
@@ -113,7 +107,7 @@ module bf1 (
        if (do_jump)
        begin // [
          if (mem_din != 0) begin
-           rspN = rsp + 1'b1; // into the loop
+           rstDeltaN  = 2'b01; // into the loop
            rstkW = 1;
          end else begin
            pcN = alu_c[12:0]; // skip the loop
@@ -122,7 +116,7 @@ module bf1 (
        else
        begin // ]
          if (mem_din != 0) pcN = rst0; // loop again
-         else rspN = rsp - 1'b1; // leave the loop
+         else rstDeltaN  = 2'b11; // leave the loop
        end
      end
    end
@@ -130,10 +124,10 @@ module bf1 (
    always @(negedge resetq or posedge clk)
    begin
      if (!resetq) begin
-       { pc, rsp, maddr, lj, lj_offset } <= 0;
+       { pc, maddr, lj, lj_offset } <= 0;
      end else begin
-       { pc, rsp, maddr, lj, lj_offset }
-       <= { pcN, rspN, maddrN, ljN, lj_offsetN };
+       { pc, maddr, lj, lj_offset }
+       <= { pcN, maddrN, ljN, lj_offsetN };
      end
    end
 
