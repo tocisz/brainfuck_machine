@@ -83,13 +83,13 @@ module bf1 (
      io_wr  = 0;
      ljN = 0;
      maddrN = maddr;
-	   mem_dout = io_din; // default that can be overriden
+	   mem_dout = io_din;
      do_jump_or_ret = 0;
      do_jump = 0;
 
      casez ({lj,insn[7:5]})
-       4'b0_00?: begin   maddrN = alu_c; end
-       4'b0_01?: begin mem_dout = alu_c[7:0]; mem_wr = 1; end
+       4'b0_00?: begin   maddrN = alu_c; end // < or >
+       4'b0_01?: begin mem_dout = alu_c[7:0]; mem_wr = 1; end // - or +
        4'b0_100: begin do_jump_or_ret = 1; do_jump = |insn[4:0]; end // [ or ]
        4'b1_???: begin do_jump_or_ret = 1; do_jump = 1; end // do long jump
        4'b0_101: begin     ljN = 1; end // begin long jump
